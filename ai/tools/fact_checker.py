@@ -1,5 +1,5 @@
 import streamlit as st
-from models import Article
+from ai.models.article import Article
 from langchain.tools import tool
 
 
@@ -43,5 +43,6 @@ def _factcheck_article(article: Article) -> bool:
 
 #LangChain tool wrapper
 @tool
-def  factcheck_tool(article: Article) -> bool:
+def factcheck_tool(article: Article) -> bool:
+    """Check article for suspicious language and red flags."""
     return _factcheck_article(article)

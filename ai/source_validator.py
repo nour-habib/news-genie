@@ -1,4 +1,4 @@
-from models import Article
+from ai.models.article import Article
 
 # Credibility scores: 0-100 (higher = more trustworthy)
 TRUSTED_SOURCES = {

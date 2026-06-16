@@ -30,7 +30,7 @@ help:
 
 # Setup & Installation
 setup:
-	python -m venv venv
+	python3 -m venv venv
 	. venv/bin/activate && pip install --upgrade pip setuptools wheel
 	. venv/bin/activate && pip install -r requirements.txt
 	cp .env.example .env
@@ -87,16 +87,16 @@ check-env:
 
 # Running the App
 run:
-	streamlit run ui/app.py
+	. venv/bin/activate && streamlit run ui/app.py
 
 dev:
-	streamlit run ui/app.py --logger.level=debug
+	. venv/bin/activate && streamlit run ui/app.py --logger.level=debug
 
 run-verbose:
-	streamlit run ui/app.py --logger.level=debug --client.logger.level=debug
+	. venv/bin/activate && streamlit run ui/app.py --logger.level=debug --client.logger.level=debug
 
 run-nologo:
-	streamlit run ui/app.py --client.showErrorDetails=true --client.toolbarMode=viewer
+	. venv/bin/activate && streamlit run ui/app.py --client.showErrorDetails=true --client.toolbarMode=viewer
 
 # Cleanup
 clean:

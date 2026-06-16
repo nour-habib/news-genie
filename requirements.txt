@@ -3,5 +3,7 @@ anthropic==0.39.0
 langchain==0.2.15
 langgraph==0.2.19
 langchain-anthropic==0.1.15
+langchain-openai==0.1.25
 requests==2.32.3
 python-dotenv==1.0.1
+tavily-python==0.3.14
