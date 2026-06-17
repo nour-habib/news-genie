@@ -4,7 +4,29 @@ from langchain_core.prompts import ChatPromptTemplate
 from typing import TypedDict, Literal
 from dotenv import load_dotenv
 
-load_dotenv() 
+load_dotenv()
+
+
+def verify_articles(articles: list) -> list:
+    """Determine veracity of each article and score from 1-5."""
+    from ai.agents.verification_agent import run as verify
+
+    for article in articles:
+        try:
+            from ai.models.article import Article
+            article_obj = Article(
+                title=article.get('title', ''),
+                description=article.get('description') or '',
+                source=article.get('source', {}).get('name', 'Unknown'),
+                url=article.get('url', '')
+            )
+            # Get veracity score
+            article['veracity_score'] = verify(article_obj)
+        except Exception as e:
+            print(f"Error verifying article: {e}")
+            article['veracity_score'] = 3  # Default to neutral
+
+    return articles 
 
 class RouterState(TypedDict):
     user_query: str
@@ -37,10 +59,9 @@ Return only the word: 'news' or 'general'"""),
 
 
 def route_to_chatbot(state: RouterState) -> RouterState:
-    """Route query to chatbot agent for processing."""
     from ai.agents.chatbot_agent import run as chatbot_run
-
     response = chatbot_run(state["user_query"], state["query_type"])
+    
     return {**state, "response": response}
 
 

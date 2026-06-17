@@ -1,87 +1,107 @@
 import requests
 import streamlit as streamlit
 import os
-from tavily import TavilyClient
-from functools import lru_cache
-
-@lru_cache(maxsize=20)
-def get_articles(category: str):
-    api_key = os.getenv("NEWS_API_KEY")
-
-    if not api_key:
-        raise ValueError("NEWS_API_KEY not set in environment variables")
-
-    response = requests.get(
-        "https://newsapi.org/v2/top-headlines",
-        params={
-            "category": category,
-            "apiKey": api_key,
-            "country": "us",
-            "sortBy": "popularity",
-        }
-    )
-
-    response.raise_for_status()
-    response_json = response.json()
-
-    print(f"Response status: {response_json.get('status')}")
-    print(f"Total articles: {len(response_json.get('articles', []))}")
-
-    # Verify articles
-    articles = response_json.get('articles', [])
-    articles = verify_articles(articles)
-    response_json['articles'] = articles
-
-    return response_json
+from datetime import datetime
 
 
-def verify_articles(articles: list) -> list:
-    """
-    Verify each article and add veracity_score (1-5).
-    """
-    from ai.agents.verification_agent import run as verify
-
-    for article in articles:
-        try:
-            # Create Article object for verification
-            from ai.models.article import Article
-            article_obj = Article(
-                title=article.get('title', ''),
-                description=article.get('description', ''),
-                source=article.get('source', {}).get('name', 'Unknown'),
-                url=article.get('url', '')
-            )
-            # Get veracity score
-            article['veracity_score'] = verify(article_obj)
-        except Exception as e:
-            print(f"Error verifying article: {e}")
-            article['veracity_score'] = 3  # Default to neutral
-
-    return articles
+_cache = {}
 
 
-def web_search(query: str, num_results: int = 3) -> str:
-    """
-    Search the web using Tavily and return formatted results.
-    """
+def fetch_articles(category: str):
+    """Fetch articles from NewsAPI and verify them."""
     try:
-        api_key = os.getenv("TAVILY_API_KEY")
+        api_key = os.getenv("NEWS_API_KEY")
+
         if not api_key:
-            return "Error: TAVILY_API_KEY not set"
+            return {
+                "status": "error",
+                "articles": [],
+                "error_message": "❌ NewsAPI key not entered."
+            }
 
-        client = TavilyClient(api_key=api_key)
-        response = client.search(query, max_results=num_results)
+        response = requests.get(
+            "https://newsapi.org/v2/top-headlines",
+            params={
+                "category": category,
+                "apiKey": api_key,
+                "country": "us",
+                "sortBy": "popularity",
+            },
+            timeout=5
+        )
 
-        # Format results
-        results = "Web search results:\n"
-        for i, result in enumerate(response.get("results", []), 1):
-            results += f"\n{i}. {result.get('title', 'No title')}\n"
-            results += f"   {result.get('content', 'No content')[:200]}...\n"
-            results += f"   Source: {result.get('url', 'No URL')}\n"
+        if response.status_code == 401:
+            return {
+                "status": "error",
+                "articles": [],
+                "error_message": "NewsService Error: Invalid NewsAPI key"
+            }
+        elif response.status_code == 429:
+            return {
+                "status": "error",
+                "articles": [],
+                "error_message": "NewsService Error: Rate limit exceeded"
+            }
+        elif response.status_code != 200:
+            return {
+                "status": "error",
+                "articles": [],
+                "error_message": f"NewsService Erro : error ({response.status_code})"
+            }
 
-        return results
+        response_json = response.json()
+
+        if response_json.get("status") == "error":
+            return {
+                "status": "error",
+                "articles": [],
+                "error_message": f"❌ NewsAPI error: {response_json.get('message', 'Unknown error')}"
+            }
+
+        print(f"Response status: {response_json.get('status')}")
+        print(f"Total articles: {len(response_json.get('articles', []))}")
+
+        # Verify articles
+        from ai.agents.router import verify_articles
+        articles = response_json.get('articles', [])
+        articles = verify_articles(articles)
+        response_json['articles'] = articles
+
+        return response_json
+
+    except requests.exceptions.Timeout:
+        return {
+            "status": "error",
+            "articles": [],
+            "error_message": "❌ NewsAPI request timed out. Please try again."
+        }
+    except requests.exceptions.ConnectionError:
+        return {
+            "status": "error",
+            "articles": [],
+            "error_message": "❌ Connection error. Please check your internet connection."
+        }
     except Exception as e:
-        return f"Error searching the web: {str(e)}"
+        return {
+            "status": "error",
+            "articles": [],
+            "error_message": f"❌ Unexpected error: {str(e)}"
+        }
+
+
+def get_articles(category: str):
+    #Get articles with custom cache logic: refresh at 7am or when empty
+    now = datetime.now()
+    time = now.time()
+
+    should_refresh = (category not in _cache) or (time.hour == 7)
+
+    if should_refresh:
+        data = fetch_articles(category)
+        _cache[category] = data
+        return data
+
+    return _cache[category]
 
 
 def ask_ai(query: str, chat_history: list = None) -> str:
@@ -112,6 +132,3 @@ def ask_ai(query: str, chat_history: list = None) -> str:
         print(f"DEBUG: Exception caught: {e}")
         traceback.print_exc()
         return f"Error processing query: {str(e)}"
-
-
-

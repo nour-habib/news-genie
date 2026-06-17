@@ -22,7 +22,8 @@ def run(user_query: str, query_type: str) -> str:
 
 def handle_news_query(user_query: str) -> str:
     """Handle news-related queries."""
-    from ui.services.news_service import get_articles, verify_articles
+    from ui.services.news_service import get_articles
+    from ai.agents.router import verify_articles
     from ai.tools.search_tool import web_search
 
     # Extract category from query
@@ -47,16 +48,25 @@ def handle_news_query(user_query: str) -> str:
     data = get_articles(api_category)
     articles = data.get("articles", [])
 
-    # If no articles found, fall back to web search
+    if data.get("status") == "error":
+        error_msg = data.get("error_message", "Unknown error")
+        print(f"DEBUG: NewsAPI error - {error_msg}")
+        try:
+            search_results = web_search.invoke({"query": user_query})
+            return f"{error_msg}\n\nFalling back to web search:\n\n{search_results}"
+        except Exception as e:
+            return f"{error_msg}\n\nWeb search also failed: {str(e)}"
+
     if not articles:
         print(f"DEBUG: No articles found for {api_category}, using web search instead")
-        search_results = web_search.invoke({"query": user_query})
-        return f"No articles found in news API. Web search results:\n\n{search_results}"
+        try:
+            search_results = web_search.invoke({"query": user_query})
+            return f"No articles found in news API. Web search results:\n\n{search_results}"
+        except Exception as e:
+            return f"No articles found and web search failed: {str(e)}"
 
-    # Verify articles
     articles = verify_articles(articles)
 
-    # Build response with links and scores
     response = f"Found {len(articles)} articles about {api_category}:\n"
     for article in articles[:3]:
         score = article.get('veracity_score', 3)
